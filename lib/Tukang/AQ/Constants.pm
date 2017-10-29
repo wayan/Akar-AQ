@@ -1,4 +1,4 @@
-package Rambutan::AQ::Constants;
+package Tukang::AQ::Constants;
 
 use strict;
 use warnings;
@@ -36,7 +36,7 @@ __END__
 
 =head1 NAME
 
-Rambutan::AQ::Constants - SUPPLY SHORT DESCRIPTION OF THE PACKAGE
+Tukang::AQ::Constants - SUPPLY SHORT DESCRIPTION OF THE PACKAGE
 
 =head1 SYNOPSIS
 

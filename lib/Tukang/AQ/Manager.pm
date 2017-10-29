@@ -1,4 +1,4 @@
-package Rambutan::AQ::Manager;
+package Tukang::AQ::Manager;
 
 use common::sense;
 
@@ -21,11 +21,11 @@ use Time::HiRes qw(gettimeofday tv_interval);
 
 use Class::Load;
 
-use Rambutan::AQ::Constants qw(LISTEN_TIMEOUT_ERRNO DEQUEUE_TIMEOUT_ERRNO NO_MESSAGE_IN_QUEUE_ERRNO);
-use Rambutan::AQ::WaitUntil;
+use Tukang::AQ::Constants qw(LISTEN_TIMEOUT_ERRNO DEQUEUE_TIMEOUT_ERRNO NO_MESSAGE_IN_QUEUE_ERRNO);
+use Tukang::AQ::WaitUntil;
 use Ref::Util qw(is_hashref);
 
-use Rambutan::AQ::Util qw(dbh_err);
+use Tukang::AQ::Util qw(dbh_err);
 
 __PACKAGE__->mk_ro_accessors(
     'dc_payload_type',
@@ -55,6 +55,7 @@ my $new_args = Type::Params::compile(
         logdir             => Any,
         storage            => HasMethods ['dbh'],
         no_fork            => Optional [Bool],
+        control_context    => Str,
         controller_options => Optional [
             HashRef | ArrayRef [ Tuple [ RegexpRef | Str, HashRef ] ]
         ],
@@ -76,8 +77,7 @@ sub new {
     my $queue_table_info = _queue_table_info( $storage->dbh, $queue_table, );
     my ( $queue_table_owner, $queue_table_name ) = split /\./, $queue_table;
 
-    my $control_context = $params->{control_context} // 'rambutan';
-
+    my $control_context = $params->{control_context};
     my $controller_options_for
         = _build_controller_options_for( $params->{controller_options} );
 
@@ -275,7 +275,7 @@ sub handle_dc_stop {
     my ($this) = @_;
 
     # stop waits until daemons are finished
-    my $waiter = Rambutan::AQ::WaitUntil->new;
+    my $waiter = Tukang::AQ::WaitUntil->new;
     for my $queue ( $this->list_queues ) {
         $this->stop_controller($queue, $waiter);
     }
@@ -285,7 +285,7 @@ sub handle_dc_stop {
 sub handle_dc_restart {
     my ($this) = @_;
 
-    my $waiter = Rambutan::AQ::WaitUntil->new;
+    my $waiter = Tukang::AQ::WaitUntil->new;
     for my $queue ( $this->list_queues ) {
         $this->stop_controller($queue, $waiter);
     }
@@ -382,7 +382,7 @@ sub stop_listener {
         return;
     }
 
-    $waiter ||= Rambutan::AQ::WaitUntil->new;
+    $waiter ||= Tukang::AQ::WaitUntil->new;
     $waiter->add(
         'check' => sub {
             # I wait until listener disappear with the particular id
@@ -401,7 +401,7 @@ sub restart_listener {
     # sends message to listener
     my $listener = $this->control_listener('restart');
 
-    $waiter ||= Rambutan::AQ::WaitUntil->new;
+    $waiter ||= Tukang::AQ::WaitUntil->new;
     $waiter->add(
         'check' => sub {
             return if !$listener;
@@ -450,10 +450,10 @@ sub start_queues {
 sub stop_queues {
     my ( $this, @queues ) = @_;
 
-    my $waiter = Rambutan::AQ::WaitUntil->new;
+    my $waiter = Tukang::AQ::WaitUntil->new;
     for my $queue ( grep { $_->{dequeue_enabled} } @queues ) {
         my $name = $queue->{name};
-        my $cwaiter = Rambutan::AQ::WaitUntil->new;
+        my $cwaiter = Tukang::AQ::WaitUntil->new;
         # TO DO
         $this->stop_queue($queue, $cwaiter);
         $waiter->add(
@@ -512,7 +512,7 @@ sub start_listener {
             $this->_start_listener($agent_name);
         }
         else {
-            $waiter ||= Rambutan::AQ::WaitUntil->new;
+            $waiter ||= Tukang::AQ::WaitUntil->new;
             $waiter->add(
                 'check' => sub {
 
@@ -713,7 +713,7 @@ sub _start_controller {
     }
     else {
         # parent is waiting until daemon either disappear or its pid is son's pid
-        my $waiter = Rambutan::AQ::WaitUntil->new;
+        my $waiter = Tukang::AQ::WaitUntil->new;
         $waiter->add(
             'check' => sub {
                 my $new_daemon = $this->load_daemon($queue);
@@ -901,7 +901,7 @@ sub clean_listener {
     my $package = __PACKAGE__;
 
     package #
-        Rambutan::AQ::DaemonControl::DCPayload;
+        Tukang::AQ::DaemonControl::DCPayload;
     use base qw(Class::Accessor::Fast);
 
     __PACKAGE__->mk_accessors( $package->dc_payload_fields );
@@ -912,7 +912,7 @@ sub dc_payload_fields { return qw(action sender); }
 sub new_dc_payload {
     my ( $this, $action, $sender ) = @_;
 
-    return Rambutan::AQ::DaemonControl::DCPayload->new(
+    return Tukang::AQ::DaemonControl::DCPayload->new(
         {   'action' => $action,
             'sender' => $sender,
         }
@@ -1436,7 +1436,7 @@ sub stop_controller {
 
     # daemon_id is remembered not the object
     my $daemon_id = $daemon && $daemon->{id};
-    $waiter ||= Rambutan::AQ::WaitUntil->new;
+    $waiter ||= Tukang::AQ::WaitUntil->new;
     $waiter->add(
         'check'      => sub {
             my $new_daemon = $this->load_daemon($queue);

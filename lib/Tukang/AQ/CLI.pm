@@ -1,11 +1,11 @@
-package Rambutan::AQ::CLI;
+package Tukang::AQ::CLI;
 
 use common::sense;
 
 use Carp qw(carp croak);
 use File::Spec;
 
-use Rambutan::AQ::Manager;
+use Tukang::AQ::Manager;
 use Akar::CLI;
 use Interpolation 'E' => 'eval';
 
@@ -419,7 +419,7 @@ __END__
 
 =head1 NAME
 
-Rambutan::AQ::CLI - Command line interface for Rambutan::AQ
+Tukang::AQ::CLI - Command line interface for Rambutan::AQ
 
 =head1 SYNOPSIS
 

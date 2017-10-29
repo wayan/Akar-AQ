@@ -1,4 +1,4 @@
-package Rambutan::AQ;
+package Tukang::AQ;
 
 use strict;
 use warnings;

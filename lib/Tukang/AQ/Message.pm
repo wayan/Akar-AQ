@@ -1,4 +1,4 @@
-package Rambutan::AQ::Message;
+package Tukang::AQ::Message;
 
 use common::sense;
 
@@ -131,7 +131,7 @@ __END__
 
 =head1 NAME
 
-Rambutan::AQ::Message - SUPPLY SHORT DESCRIPTION OF THE PACKAGE
+Tukang::AQ::Message - SUPPLY SHORT DESCRIPTION OF THE PACKAGE
 
 =head1 SYNOPSIS
 

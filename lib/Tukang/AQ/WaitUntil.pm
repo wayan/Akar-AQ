@@ -1,4 +1,4 @@
-package Rambutan::AQ::WaitUntil;
+package Tukang::AQ::WaitUntil;
 
 use common::sense;
 
@@ -116,7 +116,7 @@ __END__
 
 =head1 NAME
 
-Rambutan::AQ::WaitUntil - periodically checks the set of conditions until they are all true or timeout occured
+Tukang::AQ::WaitUntil - periodically checks the set of conditions until they are all true or timeout occured
 
 =head1 SYNOPSIS
 

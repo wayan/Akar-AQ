@@ -1,4 +1,4 @@
-package Rambutan::AQ::Util;
+package Tukang::AQ::Util;
 
 use common::sense;
 
