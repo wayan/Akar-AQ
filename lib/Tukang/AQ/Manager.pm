@@ -537,7 +537,7 @@ sub start_listener {
         }
         else {
             wait_until(
-                sub {
+                condition => sub {
                     # listener either disappear or seizes the pid
                     my $listener = $this->load_listener();
                     return !$listener || $listener->{pid} == $child_pid;
