@@ -22,10 +22,9 @@ use Time::HiRes qw(gettimeofday tv_interval);
 use Class::Load;
 
 use Tukang::AQ::Constants qw(LISTEN_TIMEOUT_ERRNO DEQUEUE_TIMEOUT_ERRNO NO_MESSAGE_IN_QUEUE_ERRNO);
-use Tukang::AQ::WaitUntil;
 use Ref::Util qw(is_hashref);
 
-use Tukang::AQ::Util qw(dbh_err);
+use Tukang::AQ::Util qw(dbh_err wait_until);
 
 __PACKAGE__->mk_ro_accessors(
     'dc_payload_type',
@@ -78,8 +77,6 @@ sub new {
     my ( $queue_table_owner, $queue_table_name ) = split /\./, $queue_table;
 
     my $control_context = $params->{control_context};
-    my $controller_options_for
-        = _build_controller_options_for( $params->{controller_options} );
 
     return $package->SUPER::new(
         {   'listen_timeout' => 60,
@@ -275,9 +272,34 @@ sub handle_dc_stop {
     my ($this) = @_;
 
     # stop waits until daemons are finished
-    my $waiter = Tukang::AQ::WaitUntil->new;
-    for my $queue ( $this->list_queues ) {
-        $this->stop_controller($queue, $waiter);
+    my (%daemon_for, %queue_for);
+    QUEUE: for my $queue ( $this->list_queues ) {
+        my $daemon = $this->load_daemon($queue);
+        if ($daemon){
+            $this->stop_controller($queue, $daemon);
+            $daemon_for{$queue->{qname}} = $daemon;
+            $queue_for{$queue->{qname}}  = $queue;
+        }
+    }
+
+
+    my $ok = wait_until(
+        condition => sub {
+            for my $qname (keys %daemon_for){
+                my $queue  = $queue_for{$qname};
+                my $daemon = $daemon_for{$qname};
+
+                my $new_daemon = $this->load_daemon($queue);
+
+                if ( !$new_daemon || $new_daemon->{id} != $daemon->{id}){
+                    delete $daemon_for{$qname};
+                }
+            }
+            return ! %daemon_for;
+        },
+    );
+    if (!$ok){
+        warn "Even after wait there are still daemons running on queues: ". join(', ', sort keys %daemon_for);
     }
     return 'stop from queue';
 }
@@ -285,13 +307,14 @@ sub handle_dc_stop {
 sub handle_dc_restart {
     my ($this) = @_;
 
-    my $waiter = Tukang::AQ::WaitUntil->new;
     for my $queue ( $this->list_queues ) {
-        $this->stop_controller($queue, $waiter);
+        my $daemon = $this->load_daemon($queue);
+        if ($daemon){
+            $this->stop_controller($queue, $daemon);
+        }
     }
 
     # restart doesn't wait until daemons are finished
-    $waiter->cancel;
     return 'restart from queue';
 }
 
@@ -372,7 +395,7 @@ END_SQL
 
 # stops the listener
 sub stop_listener {
-    my ( $this, $waiter ) = @_;
+    my ( $this) = @_;
 
     # listener object probably should not be remembered
     # so it could be found disappear when deleted by running listener
@@ -382,39 +405,40 @@ sub stop_listener {
         return;
     }
 
-    $waiter ||= Tukang::AQ::WaitUntil->new;
-    $waiter->add(
-        'check' => sub {
+    wait_until(
+        condition => sub {
+
             # I wait until listener disappear with the particular id
             my $new_listener = $this->load_listener();
-            return not($new_listener && $new_listener->{id} == $listener->{id});
-        },
-        'on_failure' => sub {
-            "Listener $E{ $this->queue_table} was sent signal but didn't stopped\n";
+            return
+                not( $new_listener
+                && $new_listener->{id} == $listener->{id} );
         }
-    );
+        )
+        or die
+        "Listener $E{ $this->queue_table} was sent signal but didn't stopped\n";
+
 }
 
 sub restart_listener {
-    my ( $this, $waiter ) = @_;
+    my ( $this ) = @_;
 
     # sends message to listener
     my $listener = $this->control_listener('restart');
+    if ($listener) {
+        wait_until(
+            condition => sub {
 
-    $waiter ||= Tukang::AQ::WaitUntil->new;
-    $waiter->add(
-        'check' => sub {
-            return if !$listener;
-            my $new_listener = $this->load_listener();
-            return not($new_listener && $new_listener->{id} == $listener->{id});
-        },
-        'on_success' => sub {
-            $this->start_listener;
-        },
-        'on_failure' => sub {
+                # I wait until listener disappear with the particular id
+                my $new_listener = $this->load_listener();
+                return not( $new_listener
+                    && $new_listener->{id} == $listener->{id} );
+            }
+            )
+            or die
             "Listener $E{ $this->queue_table} was sent signal but didn't stopped\n";
-        }
-    );
+    }
+    $this->start_listener;
 }
 
 sub wakeup_listener {
@@ -487,7 +511,7 @@ sub start_all_queues {
 
 # starts the listener
 sub start_listener {
-    my ( $this, $waiter ) = @_;
+    my ( $this ) = @_;
 
     $this->clean_dead_listener;
 
@@ -512,18 +536,13 @@ sub start_listener {
             $this->_start_listener($agent_name);
         }
         else {
-            $waiter ||= Tukang::AQ::WaitUntil->new;
-            $waiter->add(
-                'check' => sub {
-
+            wait_until(
+                sub {
                     # listener either disappear or seizes the pid
-                    my $listener_pid = $this->_get_listener_pid();
-                    return !$listener_pid || $listener_pid == $child_pid;
-                },
-                'on_failure' => sub {
-                    die "It seem that child process haven't started\n ";
+                    my $listener = $this->load_listener();
+                    return !$listener || $listener->{pid} == $child_pid;
                 }
-            );
+            ) or die "It seem that child process haven't started\n ";
         }
     }
     else {
@@ -559,7 +578,7 @@ sub _start_listener {
     if ($@) {
         $exit_reason = 'ERROR: ' . $@;
     }
-    warn "END li ($exit_reason)\n";
+    warn "END listener ($exit_reason)\n";
 
     # current listener is deleted
     $this->clean_listener();
@@ -713,12 +732,11 @@ sub _start_controller {
     }
     else {
         # parent is waiting until daemon either disappear or its pid is son's pid
-        my $waiter = Tukang::AQ::WaitUntil->new;
-        $waiter->add(
-            'check' => sub {
+        wait_until(
+            condition => sub {
                 my $new_daemon = $this->load_daemon($queue);
-                return !$new_daemon || $new_daemon->pid == $child_pid;
-            },
+                return !$new_daemon || $new_daemon->{pid} == $child_pid;
+            }
         );
     }
 
@@ -1402,18 +1420,11 @@ sub _assert_aq_queue {
 # enqueues stop message into control queue,
 # returns subroutine checking whether the daemon was stopped
 sub stop_controller {
-    my ( $this, $queue, $waiter  ) = @_;
+    my ( $this, $queue, $daemon  ) = @_;
 
     # enqueue stop into daemon queue
     my $name = $queue->{name};
-    my $daemon = $this->load_daemon($queue);
-    if ( !$daemon ) {
-
-        # no daemon
-        #    warn "No daemon running on queue $E{ $this->queue }\n";
-        return;
-    }
-    elsif ( $daemon->{being_stopped} ) {
+    if ( $daemon->{being_stopped} ) {
         warn "Daemon on $name is already being stopped\n";
         return;
     }
@@ -1434,22 +1445,6 @@ sub stop_controller {
         }
     );
 
-    # daemon_id is remembered not the object
-    my $daemon_id = $daemon && $daemon->{id};
-    $waiter ||= Tukang::AQ::WaitUntil->new;
-    $waiter->add(
-        'check'      => sub {
-            my $new_daemon = $this->load_daemon($queue);
-            ! ($new_daemon || $new_daemon->{id} != $daemon_id);
-        },
-        'on_failure' => sub {
-            die
-                "Daemon on $E{ $name } was sent stop but it is still running\n ";
-        },
-        'on_success' => sub {
-            warn "Daemon on $E{ $name } was stopped\n";
-        }
-    );
 }
 
 sub controller_loop {
@@ -1495,7 +1490,10 @@ DAEMON_LOOP:
         # dequeueing daemon control data
         if ($dc_queue_selected) {
             my $dc_message;
-            $this->storage->txn_do( sub { $dc_message = $this->dequeue_dc($daemon); }
+            $this->storage->txn_do(
+                sub {
+                    $dc_message = $this->dequeue_dc( $daemon->{agent_name} );
+                }
             );
 
             # daemon control - the only reaction is stopped
@@ -1873,7 +1871,7 @@ sub _now_str {
     my ($sec,$min,$hour,$mday,$mon,$year,$wday,$yday,$isdst) =
                                                             localtime(time);
     return sprintf(
-        '%4d-%02d-%02d %02d:%02d:%02',
+        '%04d-%02d-%02d %02d:%02d:%02d',
         $year + 1900,
         $mon + 1, $mday, $hour, $min, $sec
     );
