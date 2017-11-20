@@ -265,8 +265,8 @@ sub run_remove {
 sub run_logfile {
     my ( $this, $script_call, $manager ) = @_;
 
-    for my $controller ( $this->select_queues($manager, $script_call) ) {
-        print $controller->logpath, "\n";
+    for my $queue ( $this->select_queues($manager, $script_call) ) {
+        print $manager->logpath_for_queue($queue), "\n";
     }
 }
 

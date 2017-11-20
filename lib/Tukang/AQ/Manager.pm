@@ -603,11 +603,16 @@ sub start_controller {
     );
 }
 
+sub logpath_for_queue {
+    my ( $this, $queue ) = @_;
+    return $this->logdir . '/' . 'daemon.' . $queue->{name} . '.log';
+}
+
 sub controller_options_for {
     my ($this, $queue) = @_;
 
     return {
-        logpath => $this->logdir . '/' . 'daemon.' . $queue->{name} . '.log',
+        logpath => $this->logpath_for_queue($queue),
         listen_timeout    => 60,
         exit_when_timeout => 5,
         stop_after        => -1,
