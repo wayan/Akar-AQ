@@ -1326,7 +1326,7 @@ sub remove_messages {
     my ( $this, $queue, $selection, $options ) = @_;
 
     my $name = $queue->{name};
-    $this->retrieve_queue->dequeue_enabled
+    $queue->{dequeue_enabled}
         or die <<"END_ERROR";
 Queue $name is not started for dequeue,
 no messages can be removed from it.
@@ -1384,7 +1384,7 @@ END_PSQL
         }
     );
 
-    warn "$dequeued message(s) removed from " . $this->queue . "\n";
+    warn "$dequeued message(s) removed from $name\n";
 }
 
 
