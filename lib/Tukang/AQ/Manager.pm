@@ -1176,6 +1176,7 @@ END_ERROR
         ( $target_queue_psql, $target_queue_decl )
             = reverse $this->message_class->target_queue_sql(
             $this,
+            $queue,
             {   'payload'            => 'l_payload',
                 'message_properties' => 'l_message_properties',
                 'msgid'              => 'l_msgid',

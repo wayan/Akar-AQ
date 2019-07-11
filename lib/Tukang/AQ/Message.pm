@@ -60,17 +60,17 @@ sub process { die "No process defined"; }
 # if 2 the first is the declaration of function
 #   the second is the expression where the function may be used
 sub target_queue_sql {
-    my ( $this, $controller, $options ) = @_;
+    my ( $this, $manager, $source_queue, $options ) = @_;
 
-    # by default queuue is enqueued into same queue
-    return sql_param( $controller->queue )
-        if !$controller->is_exception_queue;
+	# attention - the parameters are not settled yet
 
     # first queue in queue table
-    my ($first_queue)
-        = grep { $_->queue_type eq 'NORMAL_QUEUE' }
-        $controller->queue_class->table_queues( $controller->queue_table );
-    return sql_param( $first_queue->qname );
+    my ($first_queue) =
+      grep { !$_->{is_exception_queue} && $_->{enqueue_enabled} }
+      $manager->list_queues
+		or die "No available target queue";
+
+    return sql_param( $first_queue->{qname} );
 }
 
 # returns where condition for
