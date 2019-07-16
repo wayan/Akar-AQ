@@ -1414,12 +1414,12 @@ sub _assert_aq_queue {
 
     my $table = join('.', $this->control_context, 'aq_queue');
     my $exists = $this->dbh->selectrow_array(
-        'SELECT 1 FROM $table WHERE queue = ?',
+        "SELECT 1 FROM $table WHERE queue = ?",
         {}, $queue_qname
     );
     if ( !$exists ) {
-        $this->dbh->do( 'INSERT INTO $table (queue) VALUES (?)',
-            {}, $$queue_qname );
+        $this->dbh->do( "INSERT INTO $table (queue) VALUES (?)",
+            {}, $queue_qname );
     }
 }
 
